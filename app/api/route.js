@@ -186,17 +186,27 @@ export async function GET(request) {
         }
       }
 
-    if (imageUrl) {
-      console.log('Found image URL:', imageUrl);
-      return new NextResponse(JSON.stringify({ url: imageUrl }), {
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
-    } else {
-      console.log('No image URL found in response');
-      return new NextResponse(JSON.stringify({ error: '未能获取到图片URL' }), {
+      if (imageUrl) {
+        console.log('Found image URL:', imageUrl);
+        return new NextResponse(JSON.stringify({ url: imageUrl }), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+      } else {
+        console.log('No image URL found in response');
+        return new NextResponse(JSON.stringify({ error: '未能获取到图片URL' }), {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error parsing response:', error);
+      return new NextResponse(JSON.stringify({ error: `响应解析失败: ${error.message}` }), {
         status: 500,
         headers: {
           'Content-Type': 'application/json',
