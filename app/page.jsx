@@ -1,12 +1,14 @@
 'use client';
 
+import { useCallback } from 'react';
+
 import { useState } from 'react';
 
-export default function Home() {
+export default function Page() {
   const [isLoading, setIsLoading] = useState(false);
   const [response, setResponse] = useState('');
 
-  async function sendRequest() {
+  const sendRequest = useCallback(async () => {
     const input = document.getElementById('inputText').value;
     setIsLoading(true);
     setResponse('正在生成...');
@@ -35,7 +37,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, []);
 
   return (
     <div className="container">
