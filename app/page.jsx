@@ -3,33 +3,41 @@
 import { useState } from 'react';
 
 export default function Page() {
-  const [response, setResponse] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   async function sendRequest() {
     const input = document.getElementById('inputText').value;
-    setResponse('正在生成...');
+    if (!input) {
+      setError('请输入表情包描述');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setImageUrl('');
 
     try {
       const response = await fetch(`/api?data=${encodeURIComponent(input)}`);
-      
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`请求失败: ${response.status}`);
       }
       
-      const decoder = new TextDecoder();
-      const reader = response.body.getReader();
-
-      setResponse('');
-
-      while (true) {
-        const {value, done} = await reader.read();
-        if (done) break;
-        
-        const text = decoder.decode(value);
-        setResponse(prev => prev + text);
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      if (data.url) {
+        setImageUrl(data.url);
+      } else {
+        throw new Error('未能获取到图片URL');
       }
     } catch (error) {
-      setResponse(`错误: ${error.message}`);
+      setError(`错误: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -37,51 +45,75 @@ export default function Page() {
     <div className="container">
       <h1>表情包生成器</h1>
       <div className="input-group">
-        <input type="text" id="inputText" placeholder="请输入表情包描述，例如：震惊" />
-        <button onClick={sendRequest}>生成表情</button>
+        <input 
+          type="text" 
+          id="inputText" 
+          placeholder="请输入表情包描述，例如：震惊" 
+          disabled={loading}
+        />
+        <button 
+          onClick={sendRequest} 
+          disabled={loading}
+        >
+          {loading ? '生成中...' : '生成表情'}
+        </button>
       </div>
-      <div id="response">{response}</div>
+      {error && <div className="error">{error}</div>}
+      {imageUrl && (
+        <div className="result">
+          <img src={imageUrl} alt="生成的表情包" />
+        </div>
+      )}
 
       <style jsx>{`
         .container {
-          font-family: Arial, sans-serif;
-          max-width: 800px;
-          margin: 0 auto;
+          max-width: 600px;
+          margin: 20px auto;
           padding: 20px;
-          background-color: white;
-          border-radius: 8px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          text-align: center;
         }
         .input-group {
-          margin-bottom: 20px;
+          margin: 20px 0;
         }
         input[type="text"] {
-          width: 100%;
+          width: 80%;
           padding: 10px;
-          border: 1px solid #ddd;
+          margin-right: 10px;
+          border: 2px solid #ddd;
           border-radius: 4px;
           font-size: 16px;
-          margin-bottom: 10px;
+        }
+        input[type="text"]:focus {
+          border-color: #4CAF50;
+          outline: none;
         }
         button {
+          padding: 10px 20px;
           background-color: #4CAF50;
           color: white;
-          padding: 10px 20px;
           border: none;
           border-radius: 4px;
           cursor: pointer;
           font-size: 16px;
         }
-        button:hover {
+        button:disabled {
+          background-color: #cccccc;
+        }
+        button:hover:not(:disabled) {
           background-color: #45a049;
         }
-        #response {
+        .error {
+          color: red;
+          margin: 10px 0;
+        }
+        .result {
           margin-top: 20px;
-          padding: 10px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          min-height: 100px;
-          white-space: pre-wrap;
+        }
+        .result img {
+          max-width: 100%;
+          border-radius: 8px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
           word-wrap: break-word;
         }
       `}</style>

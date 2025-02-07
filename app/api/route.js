@@ -58,8 +58,28 @@ export async function GET(request) {
       body: JSON.stringify(requestBody)
     });
 
-    // 返回流式响应
-    return new NextResponse(response.body, {
+    const data = await response.json();
+    
+    // 如果是function_call类型的消息，提取图片URL
+    if (data.messages && data.messages[0] && data.messages[0].content) {
+      try {
+        const content = JSON.parse(data.messages[0].content);
+        if (content && content.url) {
+          return new NextResponse(JSON.stringify({ url: content.url }), {
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+              'Access-Control-Allow-Headers': '*'
+            }
+          });
+        }
+      } catch (e) {
+        console.error('Error parsing message content:', e);
+      }
+    }
+    
+    return new NextResponse(JSON.stringify({ error: 'No image URL found' }), {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
