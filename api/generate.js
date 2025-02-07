@@ -1,22 +1,21 @@
+import { NextResponse } from 'next/server';
+
 // API路由处理函数
-export default async function handler(req, res) {
-  // 设置CORS头
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', '*');
-
-  // 处理OPTIONS请求
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
+export async function GET(request) {
   // 获取查询参数
-  const { data } = req.query;
+  const { searchParams } = new URL(request.url);
+  const data = searchParams.get('data');
 
   if (!data) {
-    res.status(400).json({ error: 'Missing data parameter' });
-    return;
+    return new NextResponse(JSON.stringify({ error: 'Missing data parameter' }), {
+      status: 400,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': '*'
+      }
+    });
   }
 
   // 构建请求体
@@ -45,16 +44,27 @@ export default async function handler(req, res) {
       body: JSON.stringify(requestBody)
     });
 
-    // 设置响应头
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
-    // 转发API响应
-    const stream = response.body;
-    stream.pipe(res);
+    // 返回流式响应
+    return new NextResponse(response.body, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': '*'
+      }
+    });
   } catch (error) {
     console.error('Error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    return new NextResponse(JSON.stringify({ error: 'Internal Server Error' }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': '*'
+      }
+    });
   }
 }
