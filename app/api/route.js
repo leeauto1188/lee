@@ -88,8 +88,17 @@ export async function GET(request) {
     messages: [
       {
         role: "user",
-        content: `生成一个表情包，内容是：${data}`,
+        content: data,
         content_type: "text"
+      }
+    ],
+    plugins: [
+      {
+        plugin_id: "7463001326394507304",
+        api_id: "7463001326394523688",
+        plugin_type: 4,
+        plugin_name: "biaoqingbao",
+        api_name: "biaoqingbao"
       }
     ]
   };
@@ -119,15 +128,20 @@ export async function GET(request) {
     console.log('API Response:', data);
 
     let imageUrl = null;
-    if (data.messages && data.messages[0] && data.messages[0].content) {
-      try {
-        const content = JSON.parse(data.messages[0].content);
-        console.log('Parsed message content:', content);
-        if (content.url) {
-          imageUrl = content.url;
+    if (data.messages) {
+      for (const message of data.messages) {
+        if (message.type === 'function_call' && message.content) {
+          try {
+            const content = JSON.parse(message.content);
+            console.log('Function call content:', content);
+            if (content.arguments && content.arguments.output) {
+              imageUrl = content.arguments.output;
+              break;
+            }
+          } catch (e) {
+            console.error('Error parsing function call content:', e);
+          }
         }
-      } catch (e) {
-        console.error('Error parsing message content:', e);
       }
     }
 
