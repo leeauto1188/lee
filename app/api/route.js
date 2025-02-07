@@ -17,6 +17,7 @@ export async function OPTIONS() {
 // API路由处理函数
 // 处理来自Coze的SSE响应
 async function processStream(reader) {
+  console.log('Starting to process stream...');
   const decoder = new TextDecoder();
   let imageUrl = null;
 
@@ -26,16 +27,22 @@ async function processStream(reader) {
       if (done) break;
 
       const chunk = decoder.decode(value);
+      console.log('Received chunk:', chunk);
       const events = chunk.split('\n\n');
 
       for (const event of events) {
+        console.log('Processing event:', event);
         if (event.includes('conversation.message.completed')) {
           const dataLine = event.split('\n').find(line => line.startsWith('data:'));
           if (dataLine) {
+            console.log('Found data line:', dataLine);
             const eventData = JSON.parse(dataLine.slice(5));
+            console.log('Parsed event data:', eventData);
             if (eventData.content) {
               try {
+                console.log('Trying to parse content:', eventData.content);
                 const content = JSON.parse(eventData.content);
+                console.log('Parsed content:', content);
                 if (content.url) {
                   imageUrl = content.url;
                   break;
@@ -76,12 +83,12 @@ export async function GET(request) {
   const requestBody = {
     bot_id: "7462973713437835327",
     user_id: "123456789",
-    stream: true,
+    stream: false,
     auto_save_history: true,
-    additional_messages: [
+    messages: [
       {
         role: "user",
-        content: data,
+        content: `生成一个表情包，内容是：${data}`,
         content_type: "text"
       }
     ]
@@ -108,8 +115,21 @@ export async function GET(request) {
       });
     }
 
-    const reader = response.body.getReader();
-    const imageUrl = await processStream(reader);
+    const data = await response.json();
+    console.log('API Response:', data);
+
+    let imageUrl = null;
+    if (data.messages && data.messages[0] && data.messages[0].content) {
+      try {
+        const content = JSON.parse(data.messages[0].content);
+        console.log('Parsed message content:', content);
+        if (content.url) {
+          imageUrl = content.url;
+        }
+      } catch (e) {
+        console.error('Error parsing message content:', e);
+      }
+    }
 
     if (imageUrl) {
       return new NextResponse(JSON.stringify({ url: imageUrl }), {
