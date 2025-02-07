@@ -1,5 +1,19 @@
 import { NextResponse } from 'next/server';
 
+// 配置跨域
+export const runtime = 'edge';
+
+// 处理OPTIONS请求
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': '*',
+    },
+  });
+}
+
 // API路由处理函数
 export async function GET(request) {
   // 获取查询参数
