@@ -88,7 +88,7 @@ export async function GET(request) {
     messages: [
       {
         role: "user",
-        content: data,
+        content: `请使用表情包生成插件，生成一个表情包，内容是：${data}`,
         content_type: "text"
       }
     ]
@@ -115,56 +115,68 @@ export async function GET(request) {
       });
     }
 
-    // 设置响应头
-    const headers = {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': '*'
-    };
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let imageUrl = null;
 
-    const stream = new ReadableStream({
-      async start(controller) {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
+    try {
+      while (!imageUrl) {
+        const {value, done} = await reader.read();
+        if (done) break;
 
-        try {
-          while (true) {
-            const {value, done} = await reader.read();
-            if (done) break;
+        buffer += decoder.decode(value, {stream: true});
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-            buffer += decoder.decode(value, {stream: true});
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              if (line.trim() === '') continue;
-              if (line.startsWith('data:')) {
+        for (const line of lines) {
+          if (line.trim() === '') continue;
+          if (line.startsWith('data:')) {
+            try {
+              const eventData = JSON.parse(line.slice(5));
+              console.log('Event data:', eventData);
+              
+              if (eventData.content) {
                 try {
-                  const eventData = JSON.parse(line.slice(5));
-                  console.log('Event data:', eventData);
-                  controller.enqueue(line + '\n');
+                  const content = JSON.parse(eventData.content);
+                  console.log('Parsed content:', content);
+                  if (content.url) {
+                    imageUrl = content.url;
+                    break;
+                  }
                 } catch (e) {
-                  console.error('Error parsing event data:', e);
+                  console.error('Error parsing content:', e);
                 }
-              } else {
-                controller.enqueue(line + '\n');
               }
+            } catch (e) {
+              console.error('Error parsing event data:', e);
             }
           }
-        } catch (e) {
-          console.error('Stream processing error:', e);
-          controller.error(e);
-        } finally {
-          controller.close();
         }
       }
-    });
+    } catch (e) {
+      console.error('Stream processing error:', e);
+      throw e;
+    } finally {
+      reader.releaseLock();
+    }
 
-    return new NextResponse(stream, { headers });
+    if (imageUrl) {
+      return new NextResponse(JSON.stringify({ url: imageUrl }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    } else {
+      return new NextResponse(JSON.stringify({ error: '未能获取到图片URL' }), {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
 
     if (imageUrl) {
       return new NextResponse(JSON.stringify({ url: imageUrl }), {
