@@ -63,6 +63,7 @@ async function processStream(reader) {
 }
 
 export async function GET(request) {
+  console.log('Received API request');
   // 获取查询参数
   const { searchParams } = new URL(request.url);
   const data = searchParams.get('data');
@@ -83,31 +84,59 @@ export async function GET(request) {
   const requestBody = {
     bot_id: "7462973713437835327",
     user_id: "123456789",
-    stream: true,
+    stream: false,
     auto_save_history: true,
     messages: [
       {
         role: "user",
-        content: `请使用表情包生成插件，生成一个表情包，内容是：${data}`,
+        content: `表情包生成：${data}`,
         content_type: "text"
+      }
+    ],
+    plugins: [
+      {
+        plugin_id: "7463001326394507304",
+        api_id: "7463001326394523688",
+        plugin_type: 4,
+        plugin_name: "biaoqingbao",
+        api_name: "biaoqingbao"
       }
     ]
   };
 
+  console.log('Request body:', JSON.stringify(requestBody, null, 2));
+
   try {
     // 调用Coze API
-    const response = await fetch('https://api.coze.cn/v3/chat', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer pat_QtNPx52lB43YqfVLgPR7lGRp3jFXnVe7VtA0Z7e0pX6KCBbNYeLc9rKOdI2dVzXr',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody)
-    });
+    let response;
+    try {
+      response = await fetch('https://api.coze.cn/v3/chat', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer pat_QtNPx52lB43YqfVLgPR7lGRp3jFXnVe7VtA0Z7e0pX6KCBbNYeLc9rKOdI2dVzXr',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
 
-    if (!response.ok) {
-      return new NextResponse(JSON.stringify({ error: `API请求失败: ${response.status}` }), {
-        status: response.status,
+      console.log('API response status:', response.status);
+      console.log('API response headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API error response:', errorText);
+        return new NextResponse(JSON.stringify({ error: `API请求失败: ${response.status}` }), {
+          status: response.status,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          }
+        });
+      }
+    } catch (error) {
+      console.error('API request error:', error);
+      return new NextResponse(JSON.stringify({ error: `API请求失败: ${error.message}` }), {
+        status: 500,
         headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
@@ -115,53 +144,50 @@ export async function GET(request) {
       });
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let imageUrl = null;
-
     try {
-      while (!imageUrl) {
-        const {value, done} = await reader.read();
-        if (done) break;
+      const data = await response.json();
+      console.log('API response data:', JSON.stringify(data, null, 2));
 
-        buffer += decoder.decode(value, {stream: true});
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+      let imageUrl = null;
 
-        for (const line of lines) {
-          if (line.trim() === '') continue;
-          if (line.startsWith('data:')) {
+      // 尝试从不同的位置获取URL
+      if (data.messages) {
+        for (const message of data.messages) {
+          if (message.content) {
             try {
-              const eventData = JSON.parse(line.slice(5));
-              console.log('Event data:', eventData);
-              
-              if (eventData.content) {
-                try {
-                  const content = JSON.parse(eventData.content);
-                  console.log('Parsed content:', content);
-                  if (content.url) {
-                    imageUrl = content.url;
-                    break;
-                  }
-                } catch (e) {
-                  console.error('Error parsing content:', e);
-                }
+              const content = JSON.parse(message.content);
+              console.log('Parsed message content:', content);
+              if (content.url) {
+                imageUrl = content.url;
+                break;
               }
             } catch (e) {
-              console.error('Error parsing event data:', e);
+              console.error('Error parsing message content:', e);
             }
           }
         }
       }
-    } catch (e) {
-      console.error('Stream processing error:', e);
-      throw e;
-    } finally {
-      reader.releaseLock();
-    }
+
+      // 检查插件返回数据
+      if (!imageUrl && data.plugin_responses) {
+        for (const response of data.plugin_responses) {
+          if (response.content) {
+            try {
+              const content = JSON.parse(response.content);
+              console.log('Parsed plugin response:', content);
+              if (content.url) {
+                imageUrl = content.url;
+                break;
+              }
+            } catch (e) {
+              console.error('Error parsing plugin response:', e);
+            }
+          }
+        }
+      }
 
     if (imageUrl) {
+      console.log('Found image URL:', imageUrl);
       return new NextResponse(JSON.stringify({ url: imageUrl }), {
         headers: {
           'Content-Type': 'application/json',
@@ -169,6 +195,7 @@ export async function GET(request) {
         }
       });
     } else {
+      console.log('No image URL found in response');
       return new NextResponse(JSON.stringify({ error: '未能获取到图片URL' }), {
         status: 500,
         headers: {
