@@ -24,14 +24,37 @@ export default function Page() {
         throw new Error(`请求失败: ${response.status}`);
       }
       
-      const data = await response.json();
-      if (data.error) {
-        throw new Error(data.error);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const {value, done} = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value);
+        const lines = text.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            try {
+              const eventData = JSON.parse(line.slice(5));
+              console.log('Received event:', eventData);
+
+              if (eventData.type === 'function_call' && eventData.content) {
+                const content = JSON.parse(eventData.content);
+                if (content.arguments && content.arguments.output) {
+                  setImageUrl(content.arguments.output);
+                  return;
+                }
+              }
+            } catch (e) {
+              console.error('Error parsing event:', e);
+            }
+          }
+        }
       }
-      
-      if (data.url) {
-        setImageUrl(data.url);
-      } else {
+
+      if (!imageUrl) {
         throw new Error('未能获取到图片URL');
       }
     } catch (error) {

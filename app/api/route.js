@@ -83,22 +83,13 @@ export async function GET(request) {
   const requestBody = {
     bot_id: "7462973713437835327",
     user_id: "123456789",
-    stream: false,
+    stream: true,
     auto_save_history: true,
     messages: [
       {
         role: "user",
         content: data,
         content_type: "text"
-      }
-    ],
-    plugins: [
-      {
-        plugin_id: "7463001326394507304",
-        api_id: "7463001326394523688",
-        plugin_type: 4,
-        plugin_name: "biaoqingbao",
-        api_name: "biaoqingbao"
       }
     ]
   };
@@ -124,26 +115,56 @@ export async function GET(request) {
       });
     }
 
-    const data = await response.json();
-    console.log('API Response:', data);
+    // 设置响应头
+    const headers = {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': '*'
+    };
 
-    let imageUrl = null;
-    if (data.messages) {
-      for (const message of data.messages) {
-        if (message.type === 'function_call' && message.content) {
-          try {
-            const content = JSON.parse(message.content);
-            console.log('Function call content:', content);
-            if (content.arguments && content.arguments.output) {
-              imageUrl = content.arguments.output;
-              break;
+    const stream = new ReadableStream({
+      async start(controller) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        try {
+          while (true) {
+            const {value, done} = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, {stream: true});
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.trim() === '') continue;
+              if (line.startsWith('data:')) {
+                try {
+                  const eventData = JSON.parse(line.slice(5));
+                  console.log('Event data:', eventData);
+                  controller.enqueue(line + '\n');
+                } catch (e) {
+                  console.error('Error parsing event data:', e);
+                }
+              } else {
+                controller.enqueue(line + '\n');
+              }
             }
-          } catch (e) {
-            console.error('Error parsing function call content:', e);
           }
+        } catch (e) {
+          console.error('Stream processing error:', e);
+          controller.error(e);
+        } finally {
+          controller.close();
         }
       }
-    }
+    });
+
+    return new NextResponse(stream, { headers });
 
     if (imageUrl) {
       return new NextResponse(JSON.stringify({ url: imageUrl }), {
