@@ -1,20 +1,16 @@
 'use client';
 
-import { useCallback } from 'react';
-
 import { useState } from 'react';
 
 export default function Page() {
-  const [isLoading, setIsLoading] = useState(false);
   const [response, setResponse] = useState('');
 
-  const sendRequest = useCallback(async () => {
+  async function sendRequest() {
     const input = document.getElementById('inputText').value;
-    setIsLoading(true);
     setResponse('正在生成...');
 
     try {
-      const response = await fetch(`/api/generate?data=${encodeURIComponent(input)}`);
+      const response = await fetch(`/api?data=${encodeURIComponent(input)}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -34,24 +30,15 @@ export default function Page() {
       }
     } catch (error) {
       setResponse(`错误: ${error.message}`);
-    } finally {
-      setIsLoading(false);
     }
-  }, []);
+  }
 
   return (
     <div className="container">
       <h1>表情包生成器</h1>
       <div className="input-group">
-        <input
-          type="text"
-          id="inputText"
-          placeholder="请输入表情包描述，例如：震惊"
-          onKeyPress={(e) => e.key === 'Enter' && sendRequest()}
-        />
-        <button onClick={sendRequest} disabled={isLoading}>
-          {isLoading ? '生成中...' : '生成表情'}
-        </button>
+        <input type="text" id="inputText" placeholder="请输入表情包描述，例如：震惊" />
+        <button onClick={sendRequest}>生成表情</button>
       </div>
       <div id="response">{response}</div>
 
@@ -85,11 +72,7 @@ export default function Page() {
           cursor: pointer;
           font-size: 16px;
         }
-        button:disabled {
-          background-color: #cccccc;
-          cursor: not-allowed;
-        }
-        button:hover:not(:disabled) {
+        button:hover {
           background-color: #45a049;
         }
         #response {
