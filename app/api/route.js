@@ -63,6 +63,13 @@ async function processStream(reader) {
 }
 
 export async function GET(request) {
+  // 设置CORS头部
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+
   console.log('=== API Request Start ===');
   console.log('Received API request');
   // 获取查询参数
@@ -83,6 +90,7 @@ export async function GET(request) {
 
   // 构建请求体
   const requestBody = {
+    stream: false,
     bot_id: "7462973713437835327",
     user_id: "user_123",
     messages: [
@@ -111,21 +119,15 @@ export async function GET(request) {
     let response;
     try {
       const apiUrl = 'https://api.coze.cn/v3/chat';
-      console.log('API URL:', apiUrl);
       
-      const headers = {
-        'Authorization': 'Bearer pat_QtNPx52lB43YqfVLgPR7lGRp3jFXnVe7VtA0Z7e0pX6KCBbNYeLc9rKOdI2dVzXr',
-        'Content-Type': 'application/json',
-      };
-      console.log('Request headers:', headers);
-      
-      const requestOptions = {
+      response = await fetch(apiUrl, {
         method: 'POST',
-        headers,
+        headers: {
+          'Authorization': 'Bearer pat_QtNPx52lB43YqfVLgPR7lGRp3jFXnVe7VtA0Z7e0pX6KCBbNYeLc9rKOdI2dVzXr',
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(requestBody)
-      };
-      
-      response = await fetch(apiUrl, requestOptions);
+      });
       console.log('=== API Response ===');
       console.log('Status:', response.status);
       console.log('Status text:', response.statusText);
@@ -169,55 +171,27 @@ export async function GET(request) {
 
     try {
       console.log('=== Parsing Response ===');
-      const responseText = await response.text();
-      console.log('Raw response:', responseText);
-      
-      const data = JSON.parse(responseText);
-      console.log('Parsed response:', JSON.stringify(data, null, 2));
-
+      const data = await response.json();
       let imageUrl = null;
 
       // 检查插件返回数据
-      console.log('=== Checking Plugin Response ===');
-      if (data.plugin_responses && data.plugin_responses.length > 0) {
-        console.log('Found plugin responses:', data.plugin_responses.length);
-        const pluginResponse = data.plugin_responses[0];
-        console.log('First plugin response:', pluginResponse);
-        
-        if (pluginResponse.content) {
-          try {
-            const content = JSON.parse(pluginResponse.content);
-            console.log('Parsed plugin content:', content);
-            if (content.url) {
-              imageUrl = content.url;
-              console.log('Found image URL in plugin response:', imageUrl);
-            } else {
-              console.log('No URL in plugin content');
-            }
-          } catch (e) {
-            console.error('Error parsing plugin response:');
-            console.error('Error name:', e.name);
-            console.error('Error message:', e.message);
-            console.error('Content:', pluginResponse.content);
-          }
-        } else {
-          console.log('No content in plugin response');
+      if (data.plugin_responses?.[0]?.content) {
+        try {
+          const content = JSON.parse(data.plugin_responses[0].content);
+          imageUrl = content.url;
+        } catch (e) {
+          console.error('Error parsing plugin response:', e);
         }
-      } else {
-        console.log('No plugin responses found');
       }
 
       if (imageUrl) {
-        console.log('=== Success ===');
-        console.log('Returning image URL:', imageUrl);
         return new NextResponse(JSON.stringify({ url: imageUrl }), {
           headers: {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
+            ...corsHeaders
           }
         });
       } else {
-        console.log('=== Error: No Image URL ===');
         return new NextResponse(JSON.stringify({
           error: '未能获取到图片URL',
           response: data
@@ -225,24 +199,18 @@ export async function GET(request) {
           status: 500,
           headers: {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
+            ...corsHeaders
           }
         });
       }
     } catch (error) {
-      console.error('=== Response Parsing Error ===');
-      console.error('Error name:', error.name);
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-      
       return new NextResponse(JSON.stringify({
-        error: `响应解析失败: ${error.message}`,
-        details: error.stack
+        error: `响应解析失败: ${error.message}`
       }), {
         status: 500,
         headers: {
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
+          ...corsHeaders
         }
       });
     }
