@@ -83,13 +83,11 @@ export async function GET(request) {
   // 构建请求体
   const requestBody = {
     bot_id: "7462973713437835327",
-    user_id: "123456789",
-    stream: false,
-    auto_save_history: true,
+    user_id: "user_123",
     messages: [
       {
         role: "user",
-        content: `表情包生成：${data}`,
+        content: `生成一个表情包：${data}`,
         content_type: "text"
       }
     ],
@@ -150,38 +148,18 @@ export async function GET(request) {
 
       let imageUrl = null;
 
-      // 尝试从不同的位置获取URL
-      if (data.messages) {
-        for (const message of data.messages) {
-          if (message.content) {
-            try {
-              const content = JSON.parse(message.content);
-              console.log('Parsed message content:', content);
-              if (content.url) {
-                imageUrl = content.url;
-                break;
-              }
-            } catch (e) {
-              console.error('Error parsing message content:', e);
-            }
-          }
-        }
-      }
-
       // 检查插件返回数据
-      if (!imageUrl && data.plugin_responses) {
-        for (const response of data.plugin_responses) {
-          if (response.content) {
-            try {
-              const content = JSON.parse(response.content);
-              console.log('Parsed plugin response:', content);
-              if (content.url) {
-                imageUrl = content.url;
-                break;
-              }
-            } catch (e) {
-              console.error('Error parsing plugin response:', e);
+      if (data.plugin_responses && data.plugin_responses.length > 0) {
+        const pluginResponse = data.plugin_responses[0];
+        if (pluginResponse.content) {
+          try {
+            const content = JSON.parse(pluginResponse.content);
+            console.log('Plugin response content:', content);
+            if (content.url) {
+              imageUrl = content.url;
             }
+          } catch (e) {
+            console.error('Error parsing plugin response:', e);
           }
         }
       }
