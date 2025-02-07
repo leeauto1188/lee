@@ -63,6 +63,7 @@ async function processStream(reader) {
 }
 
 export async function GET(request) {
+  console.log('=== API Request Start ===');
   console.log('Received API request');
   // 获取查询参数
   const { searchParams } = new URL(request.url);
@@ -106,24 +107,41 @@ export async function GET(request) {
 
   try {
     // 调用Coze API
+    console.log('=== Making API Request ===');
     let response;
     try {
-      response = await fetch('https://api.coze.cn/v3/chat', {
+      const apiUrl = 'https://api.coze.cn/v3/chat';
+      console.log('API URL:', apiUrl);
+      
+      const headers = {
+        'Authorization': 'Bearer pat_QtNPx52lB43YqfVLgPR7lGRp3jFXnVe7VtA0Z7e0pX6KCBbNYeLc9rKOdI2dVzXr',
+        'Content-Type': 'application/json',
+      };
+      console.log('Request headers:', headers);
+      
+      const requestOptions = {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer pat_QtNPx52lB43YqfVLgPR7lGRp3jFXnVe7VtA0Z7e0pX6KCBbNYeLc9rKOdI2dVzXr',
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(requestBody)
-      });
-
-      console.log('API response status:', response.status);
-      console.log('API response headers:', Object.fromEntries(response.headers.entries()));
+      };
+      
+      response = await fetch(apiUrl, requestOptions);
+      console.log('=== API Response ===');
+      console.log('Status:', response.status);
+      console.log('Status text:', response.statusText);
+      console.log('Headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('API error response:', errorText);
-        return new NextResponse(JSON.stringify({ error: `API请求失败: ${response.status}` }), {
+        console.error('API error details:');
+        console.error('Status:', response.status);
+        console.error('Status text:', response.statusText);
+        console.error('Error body:', errorText);
+        
+        return new NextResponse(JSON.stringify({
+          error: `API请求失败: ${response.status}`,
+          details: errorText
+        }), {
           status: response.status,
           headers: {
             'Content-Type': 'application/json',
@@ -132,8 +150,15 @@ export async function GET(request) {
         });
       }
     } catch (error) {
-      console.error('API request error:', error);
-      return new NextResponse(JSON.stringify({ error: `API请求失败: ${error.message}` }), {
+      console.error('=== API Request Error ===');
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      return new NextResponse(JSON.stringify({
+        error: `API请求失败: ${error.message}`,
+        details: error.stack
+      }), {
         status: 500,
         headers: {
           'Content-Type': 'application/json',
@@ -143,29 +168,48 @@ export async function GET(request) {
     }
 
     try {
-      const data = await response.json();
-      console.log('API response data:', JSON.stringify(data, null, 2));
+      console.log('=== Parsing Response ===');
+      const responseText = await response.text();
+      console.log('Raw response:', responseText);
+      
+      const data = JSON.parse(responseText);
+      console.log('Parsed response:', JSON.stringify(data, null, 2));
 
       let imageUrl = null;
 
       // 检查插件返回数据
+      console.log('=== Checking Plugin Response ===');
       if (data.plugin_responses && data.plugin_responses.length > 0) {
+        console.log('Found plugin responses:', data.plugin_responses.length);
         const pluginResponse = data.plugin_responses[0];
+        console.log('First plugin response:', pluginResponse);
+        
         if (pluginResponse.content) {
           try {
             const content = JSON.parse(pluginResponse.content);
-            console.log('Plugin response content:', content);
+            console.log('Parsed plugin content:', content);
             if (content.url) {
               imageUrl = content.url;
+              console.log('Found image URL in plugin response:', imageUrl);
+            } else {
+              console.log('No URL in plugin content');
             }
           } catch (e) {
-            console.error('Error parsing plugin response:', e);
+            console.error('Error parsing plugin response:');
+            console.error('Error name:', e.name);
+            console.error('Error message:', e.message);
+            console.error('Content:', pluginResponse.content);
           }
+        } else {
+          console.log('No content in plugin response');
         }
+      } else {
+        console.log('No plugin responses found');
       }
 
       if (imageUrl) {
-        console.log('Found image URL:', imageUrl);
+        console.log('=== Success ===');
+        console.log('Returning image URL:', imageUrl);
         return new NextResponse(JSON.stringify({ url: imageUrl }), {
           headers: {
             'Content-Type': 'application/json',
@@ -173,8 +217,11 @@ export async function GET(request) {
           }
         });
       } else {
-        console.log('No image URL found in response');
-        return new NextResponse(JSON.stringify({ error: '未能获取到图片URL' }), {
+        console.log('=== Error: No Image URL ===');
+        return new NextResponse(JSON.stringify({
+          error: '未能获取到图片URL',
+          response: data
+        }), {
           status: 500,
           headers: {
             'Content-Type': 'application/json',
@@ -183,8 +230,15 @@ export async function GET(request) {
         });
       }
     } catch (error) {
-      console.error('Error parsing response:', error);
-      return new NextResponse(JSON.stringify({ error: `响应解析失败: ${error.message}` }), {
+      console.error('=== Response Parsing Error ===');
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      return new NextResponse(JSON.stringify({
+        error: `响应解析失败: ${error.message}`,
+        details: error.stack
+      }), {
         status: 500,
         headers: {
           'Content-Type': 'application/json',
