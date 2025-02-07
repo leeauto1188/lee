@@ -15,6 +15,46 @@ export async function OPTIONS() {
 }
 
 // API路由处理函数
+// 处理来自Coze的SSE响应
+async function processStream(reader) {
+  const decoder = new TextDecoder();
+  let imageUrl = null;
+
+  try {
+    while (!imageUrl) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      const events = chunk.split('\n\n');
+
+      for (const event of events) {
+        if (event.includes('conversation.message.completed')) {
+          const dataLine = event.split('\n').find(line => line.startsWith('data:'));
+          if (dataLine) {
+            const eventData = JSON.parse(dataLine.slice(5));
+            if (eventData.content) {
+              try {
+                const content = JSON.parse(eventData.content);
+                if (content.url) {
+                  imageUrl = content.url;
+                  break;
+                }
+              } catch (e) {
+                console.error('Error parsing content:', e);
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error processing stream:', e);
+  }
+
+  return imageUrl;
+}
+
 export async function GET(request) {
   // 获取查询参数
   const { searchParams } = new URL(request.url);
@@ -58,27 +98,30 @@ export async function GET(request) {
       body: JSON.stringify(requestBody)
     });
 
-    const data = await response.json();
-    
-    // 如果是function_call类型的消息，提取图片URL
-    if (data.messages && data.messages[0] && data.messages[0].content) {
-      try {
-        const content = JSON.parse(data.messages[0].content);
-        if (content && content.url) {
-          return new NextResponse(JSON.stringify({ url: content.url }), {
-            headers: {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-              'Access-Control-Allow-Headers': '*'
-            }
-          });
+    if (!response.ok) {
+      return new NextResponse(JSON.stringify({ error: `API请求失败: ${response.status}` }), {
+        status: response.status,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
         }
-      } catch (e) {
-        console.error('Error parsing message content:', e);
-      }
+      });
     }
-    
+
+    const reader = response.body.getReader();
+    const imageUrl = await processStream(reader);
+
+    if (imageUrl) {
+      return new NextResponse(JSON.stringify({ url: imageUrl }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': '*'
+        }
+      });
+    }
+
     return new NextResponse(JSON.stringify({ error: 'No image URL found' }), {
       headers: {
         'Content-Type': 'text/event-stream',
